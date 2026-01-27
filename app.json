@@ -4,7 +4,7 @@
     "slug": "VitalNoteAI",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
+    "icon": "./assets/vitalnote_logo.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "splash": {
@@ -16,14 +16,25 @@
       "supportsTablet": true
     },
     "android": {
+      "package": "com.meditron.vitalnoteai",
+      "permissions": [
+        "AUDIO_RECORDING",
+        "INTERNET",
+        "ModifyAudioSettings"
+      ],
       "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
+        "foregroundImage": "./assets/vitalnote_logo.png",
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/vitalnote_logo.png"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "d4f27775-af6c-4807-a435-fe0aff7d0908"
+      }
     }
   }
 }
