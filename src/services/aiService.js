@@ -40,39 +40,56 @@ export const AIService = {
                 return JSON.parse(uploadResult.body).text;
             }
 
-            // 1. Fallback: Hugging Face Router (Currently Unstable/404 for Audio)
-            // https://router.huggingface.co/v1/audio/transcriptions
-            console.log("Transcribing with Hugging Face (Legacy)...");
+            // 1. Legacy Hugging Face Inference API (Often works when Router is 404)
+            // https://api-inference.huggingface.co/models/openai/whisper-large-v3
+            try {
+                console.log("Attempting Legacy HF Inference...");
+                const legacyUrl = "https://api-inference.huggingface.co/models/openai/whisper-large-v3";
+                const uploadResult = await FileSystem.uploadAsync(
+                    legacyUrl,
+                    audioUri,
+                    {
+                        httpMethod: 'POST',
+                        headers: {
+                            Authorization: `Bearer ${CONFIG.HF_API_TOKEN}`,
+                        },
+                        fieldName: 'file',
+                        uploadType: FileSystem.FileSystemUploadType.MULTIPART,
+                    }
+                );
 
-            const routerUrl = "https://router.huggingface.co/models/openai/whisper-large-v3"; // Attempting Raw Model Path
+                if (uploadResult.status === 200) {
+                    const response = JSON.parse(uploadResult.body);
+                    return response.text;
+                }
+                console.log(`Legacy API failed (${uploadResult.status}), trying Router...`);
+            } catch (err) {
+                console.log("Legacy API Error:", err.message);
+            }
 
-            // We must use Multipart upload for OpenAI compatible endpoints
-            const uploadResult = await FileSystem.uploadAsync(
+            // 2. Fallback: Hugging Face Router
+            console.log("Attempting HF Router...");
+            const routerUrl = "https://router.huggingface.co/models/openai/whisper-large-v3";
+
+            const routerResult = await FileSystem.uploadAsync(
                 routerUrl,
                 audioUri,
                 {
                     httpMethod: 'POST',
                     headers: {
-                        Authorization: `Bearer ${CONFIG.MEDITRON_API_TOKEN}`,
-                        // Content-Type is handled automatically for Multipart
+                        Authorization: `Bearer ${CONFIG.HF_API_TOKEN}`,
                     },
                     fieldName: 'file',
                     uploadType: FileSystem.FileSystemUploadType.MULTIPART,
-                    parameters: {
-                        // raw model endpoint might just want the file
-                    }
                 }
             );
 
-            if (uploadResult.status !== 200) {
-                // Try to read error 
-                console.log("Router Error Body:", uploadResult.body);
-                throw new Error(`Transcription failed (${uploadResult.status}): ${uploadResult.body}`);
+            if (routerResult.status !== 200) {
+                console.log("Router Error Body:", routerResult.body);
+                throw new Error(`All transcription attempts failed. Please get a FREE Groq Key (config.js) for 100% reliability. Status: ${routerResult.status}`);
             }
 
-            const response = JSON.parse(uploadResult.body);
-            // Raw inference might return { text: "..." } or just the text?
-            // Usually key is "text"
+            const response = JSON.parse(routerResult.body);
             return response.text;
 
         } catch (error) {
@@ -88,14 +105,18 @@ export const AIService = {
         });
 
         const instructions = template?.systemPrompt || `You are a disciplined medical documentation assistant. Generate ONLY a SOAP note based EXCLUSIVELY on the input. NEVER invent details. Use this format:
-[SUBJECTIVE]: [facts from input]
-[OBJECTIVE]: [vitals/exam from input]
-[ASSESSMENT]: [concise impression, max 3 differentials]
-[PLAN]: [immediate steps, numbered]
+# Subjective
+[facts from input]
+# Objective
+[vitals/exam from input]
+# Assessment
+[concise impression, max 3 differentials]
+# Plan
+[immediate steps, numbered]
 
 Think step-by-step:
 1. List exact facts from input.
-2. Build each section without additions.
+2. Build each section into the strict Markdown format.
 3. Output only the SOAP.`;
 
         const messages = [
@@ -112,45 +133,41 @@ Think step-by-step:
             const userContent = messages.find(m => m.role === "user")?.content || "";
             const cleanTranscript = userContent.replace('Transcript:\n"', '').replace('"', '').trim();
 
-            const systemPrompt = `You are a disciplined medical documentation assistant. Generate ONLY a SOAP note based EXCLUSIVELY on the input. NEVER invent details. Use this format:
-[SUBJECTIVE]: [facts from input]
-[OBJECTIVE]: [vitals/exam from input]
-[ASSESSMENT]: [concise impression, max 3 differentials]
-[PLAN]: [immediate steps, numbered]
-
-Think step-by-step:
-1. List exact facts from input.
-2. Build each section without additions.
-3. Output only the SOAP.`;
+            const systemPrompt = `You are a disciplined medical documentation assistant. Generate ONLY a SOAP note based EXCLUSIVELY on the input. NEVER invent details. 
+            CRITICAL: You must use these exact Markdown headers:
+            # Subjective
+            # Objective
+            # Assessment
+            # Plan`;
 
             const twoShotPrompt = `[INST] ${systemPrompt}
 
 Example 1:
 Input: "Patient has a sore throat and fever of 101 since yesterday."
 Output:
-[SUBJECTIVE]:
+# Subjective
 - Patient reports sore throat and fever (101 F) starting yesterday.
-[OBJECTIVE]:
+# Objective
 - Exams pending.
-[ASSESSMENT]:
+# Assessment
 - Possible viral pharyngitis.
-[PLAN]:
+# Plan
 1. Rest and fluids.
 2. Monitor temperature.
 
 Example 2:
 Input: "50-year-old male with chest pain. BP 150/90. No history of heart disease. Pain is non-radiating. Lungs clear."
 Output:
-[SUBJECTIVE]:
+# Subjective
 - 50yo male with chest pain.
 - Pain is non-radiating.
 - Denies history of heart disease.
-[OBJECTIVE]:
+# Objective
 - BP 150/90.
 - Lungs clear.
-[ASSESSMENT]:
+# Assessment
 - Chest pain, hypertension. Low suspicion for ACS.
-[PLAN]:
+# Plan
 1. EKG.
 2. Cardiac Enzymes.
 3. Observation.
@@ -167,12 +184,12 @@ Output:
                 // We want to extract just the SOAP part if possible, or at least ensure it starts right.
 
                 // If it produced the header, ensure spacing
-                if (generatedText.includes("[SUBJECTIVE]:") && !generatedText.startsWith("[SUBJECTIVE]:")) {
-                    // Try to snip everything before [SUBJECTIVE]
-                    const subjIndex = generatedText.indexOf("[SUBJECTIVE]:");
+                if (generatedText.includes("# Subjective") && !generatedText.startsWith("# Subjective")) {
+                    // Try to snip everything before # Subjective
+                    const subjIndex = generatedText.indexOf("# Subjective");
                     generatedText = generatedText.substring(subjIndex);
-                } else if (!generatedText.startsWith("[SUBJECTIVE]:")) {
-                    generatedText = "[SUBJECTIVE]: " + generatedText;
+                } else if (!generatedText.startsWith("# Subjective")) {
+                    generatedText = "# Subjective\n" + generatedText;
                 }
 
                 // AGGRESSIVE CLEANUP
@@ -211,7 +228,7 @@ Output:
         const response = await fetch(url, {
             method: "POST",
             headers: {
-                Authorization: `Bearer ${CONFIG.MEDITRON_API_TOKEN}`,
+                Authorization: `Bearer ${CONFIG.HF_API_TOKEN}`,
                 "Content-Type": "application/json",
             },
             body: JSON.stringify({
@@ -308,7 +325,7 @@ Patient describes: "${transcript.substring(0, 100)}..."
         const response = await fetch(url, {
             method: "POST",
             headers: {
-                Authorization: `Bearer ${CONFIG.MEDITRON_API_TOKEN}`,
+                Authorization: `Bearer ${CONFIG.HF_API_TOKEN}`,
                 "Content-Type": "application/json",
             },
             body: JSON.stringify(body),

@@ -1,0 +1,47 @@
+{
+    "project_info": {
+        "project_number": "505240327456",
+        "project_id": "vitalnoteai-19c6d",
+        "storage_bucket": "vitalnoteai-19c6d.firebasestorage.app"
+    },
+    "client": [
+        {
+            "client_info": {
+                "mobilesdk_app_id": "1:505240327456:android:65994155a35cddb203f345",
+                "android_client_info": {
+                    "package_name": "com.meditron.vitalnoteai"
+                }
+            },
+            "oauth_client": [
+                {
+                    "client_id": "505240327456-5tcorl6vse7gk0h4bjsshbutpprlntpp.apps.googleusercontent.com",
+                    "client_type": 1,
+                    "android_info": {
+                        "package_name": "com.meditron.vitalnoteai",
+                        "certificate_hash": "d6da6b303d6d5741b1b0b0fbe55730c12628b3a9"
+                    }
+                },
+                {
+                    "client_id": "505240327456-c06k63d20kughg17rg0ab1b0htigfc66.apps.googleusercontent.com",
+                    "client_type": 3
+                }
+            ],
+            "api_key": [
+                {
+                    "current_key": "AIzaSyDlfGIFMZlpWWm51mkZ_tlonAeB9fEgjxs"
+                }
+            ],
+            "services": {
+                "appinvite_service": {
+                    "other_platform_oauth_client": [
+                        {
+                            "client_id": "505240327456-c06k63d20kughg17rg0ab1b0htigfc66.apps.googleusercontent.com",
+                            "client_type": 3
+                        }
+                    ]
+                }
+            }
+        }
+    ],
+    "configuration_version": "1"
+}

@@ -18,7 +18,8 @@ const wavHeader = Buffer.from([
     0x00, 0x00, 0x00, 0x00  // Subchunk2Size
 ]);
 
-const TOKEN = "YOUR_HUGGING_FACE_TOKEN";
+const { CONFIG } = require('./src/config');
+const TOKEN = CONFIG.HF_API_TOKEN;
 
 async function testAudioEndpoint(name, url) {
     console.log(`\n--- Testing ${name} ---`);
@@ -88,6 +89,18 @@ async function run() {
     await testAudioEndpoint(
         "Qwen-Audio-Chat (Raw)",
         "https://router.huggingface.co/models/Qwen/Qwen-Audio-Chat"
+    );
+
+    // 7. Whisper Turbo (New)
+    await testAudioEndpoint(
+        "Whisper Turbo",
+        "https://router.huggingface.co/models/openai/whisper-large-v3-turbo"
+    );
+
+    // 8. Whisper Tiny (Low resource)
+    await testAudioEndpoint(
+        "Whisper Tiny",
+        "https://router.huggingface.co/models/openai/whisper-tiny"
     );
 }
 

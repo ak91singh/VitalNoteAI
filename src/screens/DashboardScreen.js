@@ -30,7 +30,7 @@ export default function DashboardScreen({ navigation }) {
                     icon="plus"
                     contentStyle={{ height: 60 }}
                     labelStyle={{ fontSize: 18 }}
-                    onPress={() => navigation.navigate('Consultation')}
+                    onPress={() => navigation.navigate('NewConsultation')}
                     style={styles.mainButton}
                 >
                     New Consultation

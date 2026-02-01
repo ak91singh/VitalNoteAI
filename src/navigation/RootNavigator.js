@@ -13,7 +13,11 @@ import ForgotPasswordScreen from '../screens/ForgotPasswordScreen';
 import DashboardScreen from '../screens/DashboardScreen';
 import ConsultationScreen from '../screens/ConsultationScreen';
 import ProfileScreen from '../screens/ProfileScreen';
-import PrivacyScreen from '../screens/PrivacyScreen';
+import NewConsultationScreen from '../screens/NewConsultationScreen';
+import PrivacyScreen from '../screens/PrivacyScreen'; // Leaving legacy for now, but replacing usage
+import TermsOfServiceScreen from '../screens/legal/TermsOfServiceScreen';
+import PrivacyPolicyScreen from '../screens/legal/PrivacyPolicyScreen';
+import DisclaimerScreen from '../screens/legal/DisclaimerScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -44,6 +48,7 @@ export default function RootNavigator() {
                     // Authenticated Stack
                     <Stack.Group>
                         <Stack.Screen name="Dashboard" component={DashboardScreen} />
+                        <Stack.Screen name="NewConsultation" component={NewConsultationScreen} />
                         <Stack.Screen name="Consultation" component={ConsultationScreen} />
                         <Stack.Screen name="Profile" component={ProfileScreen} />
                         <Stack.Screen name="Privacy" component={PrivacyScreen} options={{ headerShown: true, title: 'Legal' }} />
@@ -57,6 +62,11 @@ export default function RootNavigator() {
                         <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} />
                     </Stack.Group>
                 )}
+                <Stack.Group screenOptions={{ presentation: 'modal', headerShown: true }}>
+                    <Stack.Screen name="TermsOfService" component={TermsOfServiceScreen} options={{ title: 'Terms of Service' }} />
+                    <Stack.Screen name="PrivacyPolicy" component={PrivacyPolicyScreen} options={{ title: 'Privacy Policy' }} />
+                    <Stack.Screen name="Disclaimer" component={DisclaimerScreen} options={{ title: 'Medical Disclaimer' }} />
+                </Stack.Group>
             </Stack.Navigator>
         </NavigationContainer>
     );

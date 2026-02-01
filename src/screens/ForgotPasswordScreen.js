@@ -18,11 +18,20 @@ export default function ForgotPasswordScreen({ navigation }) {
         setLoading(true);
         try {
             await sendPasswordResetEmail(auth, email);
-            Alert.alert('Success', 'Password reset email sent!', [
+            Alert.alert('Request Received', 'If an account exists with this email, you will receive a password reset link shortly.', [
                 { text: 'OK', onPress: () => navigation.goBack() }
             ]);
         } catch (error) {
-            Alert.alert('Error', error.message);
+            // Security: Don't reveal if user exists, but handle format errors
+            if (error.code === 'auth/invalid-email') {
+                Alert.alert('Error', 'Please enter a valid email address.');
+            } else {
+                // Determine if we should show a generic success to prevent enumeration or just generic error
+                // For UX, sticking to generic success is safer, or generic error for network issues.
+                Alert.alert('Request Received', 'If an account exists with this email, you will receive a password reset link shortly.', [
+                    { text: 'OK', onPress: () => navigation.goBack() }
+                ]);
+            }
         } finally {
             setLoading(false);
         }

@@ -26,7 +26,8 @@
         "foregroundImage": "./assets/vitalnote_logo.png",
         "backgroundColor": "#ffffff"
       },
-      "edgeToEdgeEnabled": true
+      "edgeToEdgeEnabled": true,
+      "googleServicesFile": "./google-services.json"
     },
     "web": {
       "favicon": "./assets/vitalnote_logo.png"
@@ -35,6 +36,9 @@
       "eas": {
         "projectId": "d4f27775-af6c-4807-a435-fe0aff7d0908"
       }
-    }
+    },
+    "plugins": [
+      "@react-native-google-signin/google-signin"
+    ]
   }
 }

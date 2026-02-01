@@ -73,17 +73,22 @@ export default function ProfileScreen({ navigation }) {
                     <List.Item
                         title="Privacy Policy"
                         left={props => <List.Icon {...props} icon="shield-account" />}
-                        onPress={() => navigation.navigate('Privacy')}
+                        onPress={() => navigation.navigate('PrivacyPolicy')}
                     />
                     <List.Item
                         title="Terms of Service"
                         left={props => <List.Icon {...props} icon="file-document" />}
-                        onPress={() => navigation.navigate('Privacy', { type: 'terms' })}
+                        onPress={() => navigation.navigate('TermsOfService')}
+                    />
+                    <List.Item
+                        title="Medical Disclaimer"
+                        left={props => <List.Icon {...props} icon="alert-decagram" />}
+                        onPress={() => navigation.navigate('Disclaimer')}
                     />
                     <List.Item
                         title="Help & Support"
                         left={props => <List.Icon {...props} icon="help-circle" />}
-                        onPress={() => Alert.alert("Support", "Contact: support@meditron.ai")}
+                        onPress={() => Alert.alert("Support", "Contact: support@vitalnote.ai")}
                     />
                 </List.Section>
 

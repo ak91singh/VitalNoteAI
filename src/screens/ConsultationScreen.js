@@ -1,26 +1,30 @@
 import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, ScrollView, Alert, KeyboardAvoidingView, Platform } from 'react-native';
-import { Text, Button, ActivityIndicator, TextInput, Card, IconButton, useTheme } from 'react-native-paper';
+import { Text, Button, ActivityIndicator, TextInput, Card, IconButton, useTheme, Divider } from 'react-native-paper';
 import { Audio } from 'expo-av';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AIService } from '../services/aiService';
-import { CONSULTATION_TEMPLATES } from '../constants/templates';
+import { PDFService } from '../services/pdfService';
 
-export default function ConsultationScreen({ navigation }) {
+export default function ConsultationScreen({ navigation, route }) {
     const theme = useTheme();
+    const { patientName, patientId, template } = route.params || {};
 
     // State
     const [recording, setRecording] = useState(null);
     const [isRecording, setIsRecording] = useState(false);
     const [audioUri, setAudioUri] = useState(null);
-    const [status, setStatus] = useState('idle'); // idle, recording, processing_stt, processing_llm, done
+    const [status, setStatus] = useState('idle');
     const [transcript, setTranscript] = useState('');
-    const [soapNote, setSoapNote] = useState('');
-    const [duration, setDuration] = useState(0);
-    const [inputMode, setInputMode] = useState('voice'); // 'voice' or 'text'
-    const [selectedTemplateId, setSelectedTemplateId] = useState('general');
 
-    // Timer for recording
+    // Single Blob State - The Source of Truth
+    const [soapNote, setSoapNote] = useState('');
+    const [viewMode, setViewMode] = useState('preview'); // 'preview' | 'edit'
+
+    const [duration, setDuration] = useState(0);
+    const [inputMode, setInputMode] = useState('voice');
+
+    // Timer
     useEffect(() => {
         let interval;
         if (isRecording) {
@@ -35,32 +39,22 @@ export default function ConsultationScreen({ navigation }) {
         try {
             const permission = await Audio.requestPermissionsAsync();
             if (permission.status !== 'granted') {
-                Alert.alert('Permission needed', 'Microphone access is required to record consultations.');
+                Alert.alert('Permission needed', 'Microphone access is required.');
                 return;
             }
-
-            await Audio.setAudioModeAsync({
-                allowsRecordingIOS: true,
-                playsInSilentModeIOS: true,
-            });
-
-            const { recording } = await Audio.Recording.createAsync(
-                Audio.RecordingOptionsPresets.HIGH_QUALITY
-            );
-
+            await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
+            const { recording } = await Audio.Recording.createAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
             setRecording(recording);
             setIsRecording(true);
             setStatus('recording');
             setAudioUri(null);
         } catch (err) {
-            console.error('Failed to start recording', err);
             Alert.alert('Error', 'Could not start recording.');
         }
     };
 
     const stopRecording = async () => {
         if (!recording) return;
-
         setStatus('idle');
         setIsRecording(false);
         await recording.stopAndUnloadAsync();
@@ -70,21 +64,24 @@ export default function ConsultationScreen({ navigation }) {
     };
 
     const processConsultation = async () => {
-        if (!audioUri) return;
+        if (!audioUri && !transcript) return;
 
         try {
             // 1. Transcribe
-            setStatus('processing_stt');
-            const text = await AIService.transcribeAudio(audioUri);
-            setTranscript(text);
+            let currentTranscript = transcript;
+            if (audioUri) {
+                setStatus('processing_stt');
+                currentTranscript = await AIService.transcribeAudio(audioUri);
+                setTranscript(currentTranscript);
+            }
 
             // 2. Generate SOAP
             setStatus('processing_llm');
-            // Find full template object or pass ID
-            const templateObj = CONSULTATION_TEMPLATES.find(t => t.id === selectedTemplateId);
-            const soap = await AIService.generateSOAP(text, templateObj);
-            setSoapNote(soap);
+            // We expect a raw string from AI Service
+            const rawSoap = await AIService.generateSOAP(currentTranscript, template);
 
+            // 3. Set Result
+            setSoapNote(rawSoap);
             setStatus('done');
         } catch (error) {
             setStatus('idle');
@@ -98,173 +95,180 @@ export default function ConsultationScreen({ navigation }) {
         return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
     };
 
+    // --- Rich Text Renderer ---
+    // Parses lines to find Headers and colors them.
+    const MedicalMarkdownView = ({ text }) => {
+        if (!text) return <Text>No data generated.</Text>;
+
+        // Safety check for non-strings
+        const safeText = typeof text === 'string' ? text : JSON.stringify(text);
+
+        const lines = safeText.split('\n');
+        return (
+            <View>
+                {lines.map((line, index) => {
+                    const trimmed = line.trim();
+                    // Detect Headers: # Header, **Header**, or Header:
+
+                    let isHeader = false;
+                    let color = '#333';
+                    let content = line;
+
+                    // Regex to find headers
+                    const headerMatch = trimmed.match(/^#\s+(.*)|^\*\*([A-Za-z\s]+)\*\*|^([A-Za-z\s]+):$/);
+
+                    if (headerMatch) {
+                        const title = (headerMatch[1] || headerMatch[2] || headerMatch[3] || "").toLowerCase();
+                        // Only treat standard SOAP sections as Big Colored Headers
+                        if (title.includes('subjective') || title.includes('objective') || title.includes('assessment') || title.includes('plan')) {
+                            isHeader = true;
+                            if (title.includes('subjective')) color = '#2196F3'; // Blue
+                            else if (title.includes('objective')) color = '#4CAF50'; // Green
+                            else if (title.includes('assessment')) color = '#FF9800'; // Orange
+                            else if (title.includes('plan')) color = '#F44336'; // Red
+
+                            content = (headerMatch[1] || headerMatch[2] || headerMatch[3]).toUpperCase();
+                        }
+                    }
+
+                    if (isHeader) {
+                        return (
+                            <Text key={index} style={{ color: color, fontWeight: 'bold', fontSize: 18, marginTop: 16, marginBottom: 8, letterSpacing: 1 }}>
+                                {content}
+                            </Text>
+                        );
+                    } else {
+                        // Regular body text - check for bolding inside
+                        const parts = line.split(/(\*\*.*?\*\*)/g);
+                        return (
+                            <Text key={index} style={{ fontSize: 16, lineHeight: 24, color: '#333', marginBottom: 4 }}>
+                                {parts.map((part, i) => {
+                                    if (part.startsWith('**') && part.endsWith('**')) {
+                                        return <Text key={i} style={{ fontWeight: 'bold' }}>{part.slice(2, -2)}</Text>;
+                                    }
+                                    return <Text key={i}>{part}</Text>;
+                                })}
+                            </Text>
+                        );
+                    }
+                })}
+            </View>
+        );
+    };
+
     return (
         <SafeAreaView style={styles.container}>
             <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }}>
                 <ScrollView contentContainerStyle={styles.content}>
 
-                    {/* Header */}
+                    {/* Header Info */}
                     <View style={styles.header}>
-                        <Text variant="headlineMedium" style={{ color: theme.colors.primary, fontWeight: 'bold' }}>New Consultation</Text>
-                        <Text variant="bodyMedium" style={{ color: theme.colors.secondary }}>AI Scribe Active</Text>
+                        <Text variant="titleMedium" style={{ color: theme.colors.secondary }}>Patient: {patientName || 'Unknown'}</Text>
+                        <Text variant="bodySmall" style={{ color: theme.colors.secondary }}>Template: {template?.name || 'General'}</Text>
                     </View>
 
-                    {/* Template Selector */}
-                    <View style={{ marginBottom: 20 }}>
-                        <Text variant="titleSmall" style={{ marginBottom: 10 }}>Select Specialty</Text>
-                        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
-                            {CONSULTATION_TEMPLATES.map((tmpl) => (
-                                <Button
-                                    key={tmpl.id}
-                                    mode={selectedTemplateId === tmpl.id ? "contained" : "outlined"}
-                                    onPress={() => setSelectedTemplateId(tmpl.id)}
-                                    compact
-                                >
-                                    {tmpl.name}
-                                </Button>
-                            ))}
-                        </ScrollView>
-                    </View>
+                    {/* Status Feedback */}
+                    {status === 'processing_stt' && <ActivityIndicator animating={true} color={theme.colors.primary} size="large" />}
+                    {status === 'processing_llm' && <ActivityIndicator animating={true} color={theme.colors.error} size="large" />}
 
-                    {/* Mode Switcher */}
-                    <View style={styles.modeSwitch}>
-                        <Button
-                            mode={inputMode === 'voice' ? "contained" : "outlined"}
-                            onPress={() => setInputMode('voice')}
-                            style={styles.modeButton}
-                        >
-                            Record Audio
-                        </Button>
-                        <Button
-                            mode={inputMode === 'text' ? "contained" : "outlined"}
-                            onPress={() => setInputMode('text')}
-                            style={styles.modeButton}
-                        >
-                            Dictation / Type
-                        </Button>
-                    </View>
-
-                    {inputMode === 'voice' ? (
-                        <Card style={styles.card} mode="elevated">
-                            <Card.Content style={styles.recordingContainer}>
-                                <View style={styles.timerContainer}>
-                                    <Text variant="displaySmall" style={{ fontVariant: ['tabular-nums'] }}>
-                                        {formatDuration(duration)}
-                                    </Text>
-                                </View>
-
-                                {isRecording ? (
-                                    <Button
-                                        mode="contained"
-                                        onPress={stopRecording}
-                                        style={styles.recordButton}
-                                        buttonColor={theme.colors.error}
-                                        icon="stop"
-                                    >
-                                        Stop Recording
-                                    </Button>
-                                ) : (
-                                    <Button
-                                        mode="contained"
-                                        onPress={startRecording}
-                                        style={styles.recordButton}
-                                        buttonColor={theme.colors.error}
-                                        icon="microphone"
-                                        disabled={status.startsWith('processing')}
-                                    >
-                                        Start Recording
-                                    </Button>
-                                )}
-
-                                {/* Note about file upload/transcription */}
-                                {audioUri && !isRecording && (
-                                    <Text style={{ marginTop: 10, fontSize: 12, color: 'gray' }}>
-                                        *Audio will be processed using secure AI.
-                                    </Text>
-                                )}
-
-                                {audioUri && !isRecording && (
-                                    <Button
-                                        mode="contained"
-                                        onPress={processConsultation}
-                                        style={{ marginTop: 16 }}
-                                        icon="auto-fix"
-                                    >
-                                        Generate SOAP Note
-                                    </Button>
-                                )}
-                            </Card.Content>
-                        </Card>
-                    ) : (
-                        <Card style={styles.card}>
+                    {/* Input Area (Hidden when done) */}
+                    {status !== 'done' && (
+                        <Card style={styles.inputCard}>
                             <Card.Content>
-                                <Text variant="titleSmall" style={{ marginBottom: 8 }}>
-                                    Use your keyboard's microphone (🎙️) to dictate notes here, then click Generate.
-                                </Text>
-                                <TextInput
-                                    mode="outlined"
-                                    multiline
-                                    placeholder="Patient specifics, symptoms, observations..."
-                                    value={transcript}
-                                    onChangeText={setTranscript}
-                                    style={{ minHeight: 150, backgroundColor: 'white' }}
-                                />
+                                {inputMode === 'voice' ? (
+                                    <View style={{ alignItems: 'center' }}>
+                                        <Text variant="displaySmall" style={{ marginBottom: 16 }}>{formatDuration(duration)}</Text>
+                                        {isRecording ? (
+                                            <Button mode="contained" onPress={stopRecording} buttonColor={theme.colors.error}>Stop Recording</Button>
+                                        ) : (
+                                            <Button mode="contained" onPress={startRecording} disabled={!!audioUri}>
+                                                {audioUri ? 'Audio Recorded' : 'Start Recording'}
+                                            </Button>
+                                        )}
+                                    </View>
+                                ) : (
+                                    <TextInput
+                                        mode="outlined"
+                                        multiline
+                                        placeholder="Type notes here..."
+                                        value={transcript}
+                                        onChangeText={setTranscript}
+                                        style={{ minHeight: 100 }}
+                                    />
+                                )}
+                                <View style={{ flexDirection: 'row', justifyContent: 'center', marginTop: 16 }}>
+                                    <Button mode="text" onPress={() => setInputMode(inputMode === 'voice' ? 'text' : 'voice')}>
+                                        Switch to {inputMode === 'voice' ? 'Type' : 'Voice'}
+                                    </Button>
+                                </View>
+                            </Card.Content>
+                            <Card.Actions>
                                 <Button
                                     mode="contained"
-                                    onPress={() => {
-                                        setStatus('processing_llm');
-                                        const templateObj = CONSULTATION_TEMPLATES.find(t => t.id === selectedTemplateId);
-                                        AIService.generateSOAP(transcript, templateObj).then(note => {
-                                            setSoapNote(note);
-                                            setStatus('done');
-                                        }).catch(e => {
-                                            setStatus('idle');
-                                            Alert.alert("Error", e.message);
-                                        });
-                                    }}
-                                    style={{ marginTop: 16 }}
-                                    icon="auto-fix"
-                                    disabled={!transcript}
+                                    onPress={processConsultation}
+                                    style={{ flex: 1 }}
+                                    disabled={(!audioUri && !transcript) || isRecording}
                                 >
-                                    Generate SOAP Note
+                                    Generate Note
                                 </Button>
-                            </Card.Content>
+                            </Card.Actions>
                         </Card>
                     )}
 
-                    {/* Processing Status */}
-                    {(status === 'processing_stt' || status === 'processing_llm') && (
-                        <View style={styles.loadingContainer}>
-                            <ActivityIndicator size="large" animating={true} color={theme.colors.primary} />
-                            <Text style={{ marginTop: 16 }}>
-                                {status === 'processing_stt' ? 'Transcribing (this may take a moment)...' : 'Analyzing with Qwen AI...'}
-                            </Text>
-                        </View>
-                    )}
-
-                    {/* Results */}
+                    {/* Results Area - Single Unified Card */}
                     {status === 'done' && (
                         <View style={styles.resultsContainer}>
-                            <Text variant="titleMedium" style={styles.sectionTitle}>Generated SOAP Note</Text>
-                            <TextInput
-                                mode="outlined"
-                                multiline
-                                value={soapNote}
-                                onChangeText={setSoapNote}
-                                style={[styles.soapInput, { minHeight: 300 }]}
-                            />
+                            <Card style={styles.card} mode="elevated">
+                                <Card.Title
+                                    title="Clinical Analysis"
+                                    right={(props) => (
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', marginRight: 16 }}>
+                                            <Text style={{ fontSize: 12, marginRight: 8, color: '#666', fontWeight: 'bold' }}>{viewMode === 'preview' ? 'READING MODE' : 'EDIT MODE'}</Text>
+                                            <IconButton {...props} icon={viewMode === 'preview' ? "pencil" : "check"} onPress={() => setViewMode(viewMode === 'preview' ? 'edit' : 'preview')} />
+                                        </View>
+                                    )}
+                                />
+                                <Divider />
+                                <Card.Content style={{ paddingTop: 16 }}>
+                                    {viewMode === 'preview' ? (
+                                        <MedicalMarkdownView text={soapNote} />
+                                    ) : (
+                                        <TextInput
+                                            mode="flat"
+                                            multiline
+                                            value={soapNote}
+                                            onChangeText={setSoapNote}
+                                            style={{ backgroundColor: '#f9f9f9', fontSize: 16, minHeight: 300 }}
+                                            underlineColor="transparent"
+                                        />
+                                    )}
+                                </Card.Content>
+                            </Card>
 
-                            <Button mode="contained" style={{ marginTop: 24 }} onPress={() => navigation.navigate('Dashboard')}>
-                                Save to Patient Record
-                            </Button>
+                            <View style={styles.actionButtons}>
+                                <Button
+                                    mode="contained"
+                                    icon="file-pdf-box"
+                                    onPress={() => {
+                                        console.log("Exporting PDF with data:", soapNote);
+                                        // Pass the single string note
+                                        PDFService.generateAndShare(patientName, patientId, soapNote);
+                                    }}
+                                    style={{ flex: 1, marginRight: 8, backgroundColor: '#E91E63' }}
+                                >
+                                    Export PDF
+                                </Button>
+                                <Button
+                                    mode="contained"
+                                    icon="check"
+                                    onPress={() => navigation.navigate('Dashboard')}
+                                    style={{ flex: 1, backgroundColor: theme.colors.primary }}
+                                >
+                                    Save & Close
+                                </Button>
+                            </View>
                         </View>
                     )}
-
-                    {/* Disclaimer Footer */}
-                    <Text style={styles.disclaimer}>
-                        IMPORTANT: This tool uses AI to assist with documentation. It is not a substitute for professional medical judgment.
-                        Review all output for accuracy before saving. Do not enter PII/PHI in this demo version.
-                    </Text>
 
                 </ScrollView>
             </KeyboardAvoidingView>
@@ -273,60 +277,11 @@ export default function ConsultationScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: '#F5F7FA',
-    },
-    content: {
-        padding: 20,
-        paddingBottom: 40,
-    },
-    header: {
-        marginBottom: 24,
-    },
-    modeSwitch: {
-        flexDirection: 'row',
-        marginBottom: 16,
-        gap: 10,
-    },
-    modeButton: {
-        flex: 1,
-    },
-    card: {
-        backgroundColor: 'white',
-        marginBottom: 24,
-    },
-    recordingContainer: {
-        alignItems: 'center',
-        padding: 16,
-    },
-    timerContainer: {
-        marginBottom: 24,
-    },
-    recordButton: {
-        width: 200,
-        borderRadius: 50,
-    },
-    loadingContainer: {
-        alignItems: 'center',
-        padding: 32,
-    },
-    resultsContainer: {
-        marginTop: 0,
-    },
-    sectionTitle: {
-        marginTop: 16,
-        marginBottom: 8,
-        fontWeight: 'bold',
-    },
-    soapInput: {
-        backgroundColor: 'white',
-    },
-    disclaimer: {
-        marginTop: 32,
-        fontSize: 12,
-        color: '#666',
-        textAlign: 'center',
-        fontStyle: 'italic',
-    }
+    container: { flex: 1, backgroundColor: '#F5F7FA' },
+    content: { padding: 16, paddingBottom: 40 },
+    header: { marginBottom: 16, alignItems: 'center' },
+    inputCard: { marginBottom: 24, backgroundColor: 'white' },
+    card: { marginBottom: 12, backgroundColor: 'white' },
+    resultsContainer: { marginTop: 10 },
+    actionButtons: { flexDirection: 'row', marginTop: 24, paddingBottom: 20 }
 });

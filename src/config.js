@@ -1,6 +1,10 @@
 export const CONFIG = {
-    MEDITRON_API_TOKEN: "YOUR_HUGGING_FACE_TOKEN",
-    GROQ_API_KEY: "", // GET FREE KEY: https://console.groq.com/keys
+    // SECURITY WARNING: DO NOT COMMIT REAL KEYS TO GIT
+    // Use Environment Variables in Production (EAS Secrets)
+
+    HF_API_TOKEN: "YOUR_HUGGING_FACE_TOKEN_HERE",
+    GROQ_API_KEY: "YOUR_GROQ_API_KEY_HERE", // GET FREE KEY: https://console.groq.com/keys
+
     // Dedicated Endpoint (Paid/Custom). Uncomment to use.
     // DEDICATED_ENDPOINT_URL: "https://m5qwx9isfucjasw6.us-east-1.aws.endpoints.huggingface.cloud",
     DEDICATED_ENDPOINT_URL: "",

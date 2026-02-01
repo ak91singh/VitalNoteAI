@@ -6,10 +6,44 @@ import { theme } from '../theme';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { auth } from '../services/firebase';
 
+import { GoogleSignin } from '@react-native-google-signin/google-signin';
+import { GoogleAuthProvider, signInWithCredential } from 'firebase/auth';
+
+// Initialize Google Sign-In
+GoogleSignin.configure({
+    webClientId: '505240327456-008a37e9dbd6a30803f345.apps.googleusercontent.com', // From firebaseConfig
+});
+
 export default function LoginScreen({ navigation }) {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [loading, setLoading] = useState(false);
+
+    const handleGoogleLogin = async () => {
+        try {
+            setLoading(true);
+            await GoogleSignin.hasPlayServices();
+            const response = await GoogleSignin.signIn();
+            const { idToken } = response.data;
+
+            console.log("GOOGLE SIGNIN ID TOKEN:", idToken ? "FOUND" : "MISSING");
+
+            const googleCredential = GoogleAuthProvider.credential(idToken);
+            await signInWithCredential(auth, googleCredential);
+            // Navigation handled by onAuthStateChanged in RootNavigator
+        } catch (error) {
+            console.log("Google Sign-In Error", error);
+            if (error.code === 'SIGN_IN_CANCELLED') {
+                // user cancelled the login flow
+            } else if (error.code === 'IN_PROGRESS') {
+                // operation (e.g. sign in) is in progress already
+            } else {
+                Alert.alert('Google Sign-In Failed', error.message);
+            }
+        } finally {
+            setLoading(false);
+        }
+    };
 
     const handleLogin = async () => {
         if (!email || !password) {
@@ -20,7 +54,15 @@ export default function LoginScreen({ navigation }) {
         try {
             await signInWithEmailAndPassword(auth, email, password);
         } catch (error) {
-            Alert.alert('Login Failed', error.message);
+            let message = "An error occurred. Please try again.";
+            if (error.code === 'auth/invalid-credential' || error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password') {
+                message = "Invalid email or password. Please try again.";
+            } else if (error.code === 'auth/invalid-email') {
+                message = "The email address is badly formatted.";
+            } else if (error.code === 'auth/too-many-requests') {
+                message = "Too many failed attempts. Please try again later.";
+            }
+            Alert.alert('Login Failed', message);
         } finally {
             setLoading(false);
         }
@@ -66,6 +108,25 @@ export default function LoginScreen({ navigation }) {
                     >
                         Forgot Password?
                     </Button>
+                </View>
+
+                <Button
+                    mode="outlined"
+                    icon="google"
+                    onPress={handleGoogleLogin}
+                    loading={loading}
+                    style={[styles.button, { marginBottom: 16, borderColor: '#DB4437' }]}
+                    textColor="#DB4437"
+                >
+                    Sign in with Google
+                </Button>
+
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}>
+                    <View style={{ flex: 1, height: 1, backgroundColor: '#ccc' }} />
+                    <View>
+                        <Text style={{ width: 50, textAlign: 'center', color: '#999' }}>OR</Text>
+                    </View>
+                    <View style={{ flex: 1, height: 1, backgroundColor: '#ccc' }} />
                 </View>
 
                 <Button
