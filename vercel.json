@@ -1,0 +1,7 @@
+{
+  "redirects": [
+    { "source": "/subscribe",      "destination": "/#subscribe",      "permanent": false },
+    { "source": "/privacy-policy", "destination": "/#privacy-policy", "permanent": false },
+    { "source": "/terms",          "destination": "/#terms",          "permanent": false }
+  ]
+}

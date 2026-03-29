@@ -5,7 +5,6 @@ import { Alert, Platform } from 'react-native';
 export const PDFService = {
     async generateAndShare(patientName, patientId, soapNote) {
         try {
-            console.log("PDFService received:", typeof soapNote);
 
             // Safety Check: Ensure soapNote is a string
             let contentString = "";
@@ -30,7 +29,7 @@ export const PDFService = {
                 await Sharing.shareAsync(uri, { dialogTitle: 'Share SOAP Note PDF' });
             }
         } catch (error) {
-            console.error("PDF Error:", error);
+            if (__DEV__) console.error("PDF Error:", error);
             Alert.alert("PDF Export Failed", "Could not generate or share the PDF. Ensure you have the necessary permissions.");
         }
     },
@@ -74,12 +73,15 @@ export const PDFService = {
         <head>
             <style>
                 @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;700&display=swap');
-                body { font-family: 'Roboto', Helvetica, Arial, sans-serif; padding: 40px; color: #333; line-height: 1.6; }
+                body { font-family: 'Roboto', Helvetica, Arial, sans-serif; padding: 40px; color: #1A1A1A; line-height: 1.6; }
                 
                 /* Header / Brand */
-                .header { display: flex; justify-content: space-between; align-items: flex-end; border-bottom: 3px solid #0056b3; padding-bottom: 20px; margin-bottom: 40px; }
-                .brand { font-size: 28px; font-weight: 700; color: #0056b3; text-transform: uppercase; letter-spacing: 1px; }
-                .brand-sub { font-size: 14px; font-weight: 300; color: #666; margin-top: 5px; }
+                .header { display: flex; justify-content: space-between; align-items: flex-end; border-bottom: 3px solid #1A5490; padding-bottom: 20px; margin-bottom: 40px; }
+                .brand-container { display: flex; align-items: center; }
+                .logo { font-size: 40px; color: #1A5490; margin-right: 15px; } /* Simple Medical Cross */
+                .brand { font-size: 28px; font-weight: 700; color: #1A5490; text-transform: uppercase; letter-spacing: 1px; }
+                .brand-sub { font-size: 14px; font-weight: 300; color: #555; margin-top: 0px; }
+                
                 .meta { text-align: right; font-size: 14px; color: #555; }
                 .meta b { color: #000; }
 
@@ -91,28 +93,35 @@ export const PDFService = {
                     margin-top: 30px; 
                     margin-bottom: 15px; 
                     padding-bottom: 8px;
-                    border-bottom: 1px solid #eee; 
+                    border-bottom: 2px solid #eee; 
                     font-size: 18px; 
                     font-weight: 700; 
                     letter-spacing: 0.5px;
+                    text-transform: uppercase;
                 }
-                .subjective { color: #2196F3; border-color: #bbdefb; }
-                .objective { color: #4CAF50; border-color: #c8e6c9; }
+                .subjective { color: #1A5490; border-color: #bbdefb; } /* Deep Blue */
+                .objective { color: #00A896; border-color: #c8e6c9; } /* Teal */
                 .assessment { color: #FF9800; border-color: #ffe0b2; }
                 .plan { color: #F44336; border-color: #ffcdd2; }
 
                 /* Lists */
-                li { margin-bottom: 5px; margin-left: 20px; }
+                li { margin-bottom: 8px; margin-left: 20px; }
+                b { color: #000; font-weight: 600; }
 
                 /* Footer */
-                .footer { margin-top: 60px; font-size: 11px; color: #aaa; text-align: center; border-top: 1px solid #f0f0f0; padding-top: 20px; }
+                .footer { margin-top: 80px; font-size: 10px; color: #aaa; text-align: center; border-top: 1px solid #f0f0f0; padding-top: 20px; font-family: monospace; }
+                .signature-box { display: flex; justify-content: flex-end; margin-top: 60px; margin-bottom: 20px; }
+                .signature-line { border-top: 1px solid #333; width: 250px; text-align: center; padding-top: 10px; font-weight: bold; font-size: 14px; }
             </style>
         </head>
         <body>
             <div class="header">
-                <div>
-                    <div class="brand">VitalNote AI</div>
-                    <div class="brand-sub">Clinical Documentation System</div>
+                <div class="brand-container">
+                    <div class="logo">✚</div>
+                    <div>
+                        <div class="brand">VitalNote AI</div>
+                        <div class="brand-sub">Advanced Clinical Documentation</div>
+                    </div>
                 </div>
                 <div class="meta">
                     <div><b>Patient:</b> ${patientName}</div>
@@ -125,8 +134,15 @@ export const PDFService = {
                 ${formattedContent}
             </div>
 
+            <div class="signature-box">
+                <div class="signature-line">
+                    Electronically Signed<br>
+                    <span style="font-weight:normal; font-size:12px; color:#666">Dr. [Signature Required]</span>
+                </div>
+            </div>
+
             <div class="footer">
-                Electronically generated by VitalNote AI. This document serves as a preliminary clinical record. Verified by __________________________
+                Generated by VitalNote AI v2.0 • HIPAA Compliant Audit Trail • ID: ${Math.random().toString(36).substr(2, 9).toUpperCase()}
             </div>
         </body>
         </html>

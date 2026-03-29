@@ -1,0 +1,45 @@
+# .easignore — used by EAS Build INSTEAD of .gitignore
+# -------------------------------------------------------
+# Rules are identical to .gitignore with ONE intentional difference:
+# .env is NOT listed here so EAS copies it to the build temp dir.
+# This allows app.config.js to read API keys via fs.readFileSync at build time.
+#
+# .gitignore still excludes .env from git (keys are never committed).
+# For EAS cloud builds, EAS secrets are used instead (auto-injected).
+
+# dependencies
+node_modules/
+
+# Expo
+.expo/
+dist/
+web-build/
+expo-env.d.ts
+
+# Native
+.kotlin/
+*.orig.*
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+
+# Metro
+.metro-health-check*
+
+# debug
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+
+# macOS
+.DS_Store
+*.pem
+
+# typescript
+*.tsbuildinfo
+
+# generated native folders
+/ios
+/android

@@ -5,7 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { theme } from '../theme';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { auth, db } from '../services/firebase';
-import { doc, setDoc } from 'firebase/firestore';
+import { doc, setDoc, getDoc } from 'firebase/firestore';
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
 import { GoogleAuthProvider, signInWithCredential } from 'firebase/auth';
 
@@ -17,9 +17,13 @@ export default function SignupScreen({ navigation }) {
     const [agreed, setAgreed] = useState(false);
 
     useEffect(() => {
-        GoogleSignin.configure({
-            webClientId: '505240327456-c06k63d20kughg17rg0ab1b0htigfc66.apps.googleusercontent.com',
-        });
+        try {
+            GoogleSignin.configure({
+                webClientId: '210524741398-veoha04v58hat92d67brvvevm3od4do1.apps.googleusercontent.com',
+            });
+        } catch (e) {
+            if (__DEV__) console.error("Google Sign-In Config Error:", e);
+        }
     }, []);
 
     const handleSignup = async () => {
@@ -55,31 +59,43 @@ export default function SignupScreen({ navigation }) {
             Alert.alert('Error', 'You must agree to the Terms of Service and Privacy Policy to continue.');
             return;
         }
+        setLoading(true);
         try {
-            setLoading(true);
             await GoogleSignin.hasPlayServices();
+
+            // v16 API: signIn() returns { type, data } not { idToken } directly
             const response = await GoogleSignin.signIn();
-            const { idToken } = response.data;
+            if (response.type !== 'success') {
+                // User cancelled — not an error
+                setLoading(false);
+                return;
+            }
+
+            const idToken = response.data?.idToken;
+            if (!idToken) {
+                Alert.alert('Google Sign-In Error', 'Could not retrieve ID token. Please try again.');
+                setLoading(false);
+                return;
+            }
+
             const googleCredential = GoogleAuthProvider.credential(idToken);
             const userCredential = await signInWithCredential(auth, googleCredential);
 
-            // Check if user doc exists, if not create it
-            // (Simpler to just write merge: true to avoid overwriting logic complexity here)
-            await setDoc(doc(db, "users", userCredential.user.uid), {
-                name: userCredential.user.displayName,
-                email: userCredential.user.email,
-                lastLogin: new Date().toISOString(),
-            }, { merge: true });
-
-        } catch (error) {
-            console.log("Google Sign-In Error", error);
-            if (error.code === 'SIGN_IN_CANCELLED') {
-                // user cancelled
-            } else if (error.code === 'IN_PROGRESS') {
-                // in progress
-            } else {
-                Alert.alert('Google Sign-In Failed', error.message);
+            // Check if user document exists, if not create it
+            const userDoc = await getDoc(doc(db, "users", userCredential.user.uid));
+            if (!userDoc.exists()) {
+                await setDoc(doc(db, "users", userCredential.user.uid), {
+                    name: userCredential.user.displayName,
+                    email: userCredential.user.email,
+                    createdAt: new Date().toISOString(),
+                    role: 'user',
+                    subscriptionStatus: 'trial',
+                    trialCount: 0
+                });
             }
+        } catch (error) {
+            if (__DEV__) console.error('Google Sign-Up Error:', error);
+            Alert.alert('Google Sign-In Error', error.message || 'An unexpected error occurred.');
         } finally {
             setLoading(false);
         }

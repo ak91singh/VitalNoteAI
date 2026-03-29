@@ -4,26 +4,27 @@ import { getFirestore } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 import ReactNativeAsyncStorage from '@react-native-async-storage/async-storage';
 
-// Your web app's Firebase configuration
 const firebaseConfig = {
-    apiKey: "AIzaSyBiwPVOUNG9j5TLV4YJrNmzu_mj1Kwqf7E",
-    authDomain: "vitalnoteai-19c6d.firebaseapp.com",
-    projectId: "vitalnoteai-19c6d",
-    storageBucket: "vitalnoteai-19c6d.firebasestorage.app",
-    messagingSenderId: "505240327456",
-    appId: "1:505240327456:web:008a37e9dbd6a30803f345"
+    apiKey: "AIzaSyBOUsszyeJtXeo6eW6zIJKdiqD4FPybQkw",
+    authDomain: "vitalnoteai-prod.firebaseapp.com",
+    projectId: "vitalnoteai-prod",
+    storageBucket: "vitalnoteai-prod.firebasestorage.app",
+    messagingSenderId: "210524741398",
+    appId: "1:210524741398:web:4dde5074f0defbb7237a37"
 };
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
 
-// Initialize Auth with Persistence
+// BUG 3 FIX: typeof window is ALWAYS true in React Native (RN polyfills window).
+// Use a clean singleton pattern: initializeAuth with persistence, catch double-init on hot reload.
 let auth;
-if (typeof window !== 'undefined') { // Safety check for simple JS environments
+try {
     auth = initializeAuth(app, {
         persistence: getReactNativePersistence(ReactNativeAsyncStorage)
     });
-} else {
+} catch (e) {
+    // Already initialized (e.g. fast refresh / hot reload) — get the existing instance
     auth = getAuth(app);
 }
 

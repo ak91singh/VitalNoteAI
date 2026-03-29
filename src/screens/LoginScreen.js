@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, Alert, Image } from 'react-native';
 import { Button, Text, TextInput } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -9,37 +9,48 @@ import { auth } from '../services/firebase';
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
 import { GoogleAuthProvider, signInWithCredential } from 'firebase/auth';
 
-// Initialize Google Sign-In
-GoogleSignin.configure({
-    webClientId: '505240327456-008a37e9dbd6a30803f345.apps.googleusercontent.com', // From firebaseConfig
-});
-
 export default function LoginScreen({ navigation }) {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [loading, setLoading] = useState(false);
 
-    const handleGoogleLogin = async () => {
+    // BUG 1 FIX: configure must be inside the component, not at module scope
+    useEffect(() => {
         try {
-            setLoading(true);
-            await GoogleSignin.hasPlayServices();
-            const response = await GoogleSignin.signIn();
-            const { idToken } = response.data;
+            GoogleSignin.configure({
+                webClientId: '210524741398-veoha04v58hat92d67brvvevm3od4do1.apps.googleusercontent.com',
+            });
+        } catch (e) {
+            if (__DEV__) console.error("Google Sign-In Config Error:", e);
+        }
+    }, []);
 
-            console.log("GOOGLE SIGNIN ID TOKEN:", idToken ? "FOUND" : "MISSING");
+    const handleGoogleLogin = async () => {
+        setLoading(true);
+        try {
+            await GoogleSignin.hasPlayServices();
+
+            // BUG 2 FIX: v13+ API returns { type, data } not { idToken } directly
+            const response = await GoogleSignin.signIn();
+
+            if (response.type !== 'success') {
+                // User cancelled or other non-error non-success state
+                setLoading(false);
+                return;
+            }
+
+            const idToken = response.data?.idToken;
+            if (!idToken) {
+                Alert.alert('Google Sign-In Error', 'Could not retrieve ID token. Please try again.');
+                setLoading(false);
+                return;
+            }
 
             const googleCredential = GoogleAuthProvider.credential(idToken);
             await signInWithCredential(auth, googleCredential);
-            // Navigation handled by onAuthStateChanged in RootNavigator
         } catch (error) {
-            console.log("Google Sign-In Error", error);
-            if (error.code === 'SIGN_IN_CANCELLED') {
-                // user cancelled the login flow
-            } else if (error.code === 'IN_PROGRESS') {
-                // operation (e.g. sign in) is in progress already
-            } else {
-                Alert.alert('Google Sign-In Failed', error.message);
-            }
+            if (__DEV__) console.error('Google Sign-In Error:', error);
+            Alert.alert('Google Sign-In Error', error.message || 'An unexpected error occurred.');
         } finally {
             setLoading(false);
         }
