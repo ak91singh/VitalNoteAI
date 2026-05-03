@@ -18,6 +18,7 @@
 
 import { CONFIG } from '../config';
 import { HallucinationAuditor } from './HallucinationAuditor';
+import { logGenerationEvent } from './auditLogger';
 
 const GROQ_API_URL       = 'https://api.groq.com/openai/v1/chat/completions';
 const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions';
@@ -55,10 +56,11 @@ export const AgenticSOAPService = {
    * Stage 1 always runs. Stage 2 always runs (but its failure never blocks the doctor).
    * Stage 3 fires only when Stage 2 finds hallucinations — single pass, no loop.
    */
-  async generateSOAP(transcript, language = 'English', isMultiSpeaker = true, onProgress = null) {
+  async generateSOAP(userId, transcript, language = 'English', isMultiSpeaker = true, onProgress = null) {
     const startTime = Date.now();
-    // Reset token accumulator for this generation run
+    // Reset accumulators for this generation run
     this._tokenAccumulator = { promptTokens: 0, completionTokens: 0 };
+    this._lastModelUsed = null;
 
     const progress = (stage, message) => {
       if (onProgress && typeof onProgress === 'function') {
@@ -76,6 +78,12 @@ export const AgenticSOAPService = {
       stage1Result = await this._generateSOAPInOneShot(transcript, isMultiSpeaker, language);
     } catch (error) {
       console.error('❌ Stage 1 failed:', error);
+      logGenerationEvent(userId, {
+        success: false,
+        language,
+        isMultiSpeaker,
+        errorMessage: error.message,
+      });
       return { success: false, error: error.message };
     }
 
@@ -149,7 +157,7 @@ export const AgenticSOAPService = {
 
     progress('complete', 'Your note is ready');
 
-    return {
+    const successResult = {
       success: true,
       soapNote: finalFormattedNote,
       metadata: {
@@ -183,6 +191,20 @@ export const AgenticSOAPService = {
         moneySavedUSD,
       }
     };
+
+    logGenerationEvent(userId, {
+      success:                true,
+      modelUsed:              this._lastModelUsed,
+      qualityScore:           audit?.quality_score             ?? null,
+      confidenceScore:        audit?.confidence_score          ?? null,
+      hallucinationsDetected: audit?.hallucinations_detected   ?? null,
+      misattributionsDetected: audit?.misattributions_detected ?? null,
+      generationTimeSeconds:  elapsedTime,
+      language,
+      isMultiSpeaker,
+    });
+
+    return successResult;
   },
 
   /**
@@ -456,6 +478,7 @@ Return this JSON:
         if (__DEV__) console.log(`[SOAP] Trying: ${tier.label}`);
         const result = await this._callSingleTier(tier, systemPrompt, userPrompt, temperature);
         if (__DEV__) console.log(`[SOAP] Success: ${tier.label}`);
+        this._lastModelUsed = tier.label;
         return result;
       } catch (err) {
         errors.push(`${tier.label}: ${err.message}`);
