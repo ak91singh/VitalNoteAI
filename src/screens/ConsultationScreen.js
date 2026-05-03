@@ -181,6 +181,7 @@ export default function ConsultationScreen({ navigation, route }) {
             if (__DEV__) console.log('🤖 Using Agentic SOAP Generation (5-agent validation)');
 
             const result = await AgenticSOAPService.generateSOAP(
+                auth.currentUser?.uid ?? null,
                 currentTranscript,
                 selectedLanguage,
                 // Text mode is always single-narrator dictation — speaker attribution
